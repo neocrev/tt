@@ -107,6 +107,48 @@ def _parse_dur(s, e):
         return ed - sd
     except: return None
 
+def cmd_report(args):
+    ensure()
+    if not LOG_FILE.exists():
+        print("tt: no log entries yet")
+        return
+    entries = []
+    with open(LOG_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try: entries.append(json.loads(line))
+                except: pass
+    if not entries:
+        print("tt: no log entries")
+        return
+    today = datetime.now()
+    week_ago = today - timedelta(days=7)
+    week_entries = [e for e in entries if e.get("start","")[:10] >= week_ago.strftime("%Y-%m-%d")]
+    if not week_entries:
+        print("tt: no entries in the past 7 days")
+        return
+    tasks = {}
+    for e in week_entries:
+        task = e.get("task","untitled")
+        d = _parse_dur(e.get("start",""), e.get("end",""))
+        if d:
+            tasks.setdefault(task, timedelta())
+            tasks[task] += d
+    total = sum(tasks.values(), timedelta())
+    print(f"tt: weekly report ({week_ago.strftime('%b %d')} – {today.strftime('%b %d')})")
+    print()
+    for task, dur in sorted(tasks.items(), key=lambda x: -x[1].total_seconds()):
+        h, r = divmod(int(dur.total_seconds()), 3600)
+        m, s = divmod(r, 60)
+        bar = "█" * min(int(h * 2 + m / 30), 30) or "▏"
+        pct = dur.total_seconds() / total.total_seconds() * 100 if total.total_seconds() else 0
+        print(f"  {bar}  {task:<28} {h}h {m}m ({pct:.0f}%)")
+    print()
+    h, r = divmod(int(total.total_seconds()), 3600)
+    m, s = divmod(r, 60)
+    print(f"  Total: {h}h {m}m across {len(tasks)} tasks")
+
 def main():
     parser = argparse.ArgumentParser(
         description="tt — simple command-line time tracker.",
@@ -129,6 +171,9 @@ def main():
     p = sub.add_parser("log", help="Show time log")
     p.add_argument("--today", action="store_true", help="Show only today's entries")
     p.set_defaults(func=cmd_log)
+
+    p = sub.add_parser("report", help="Show weekly summary of tracked time")
+    p.set_defaults(func=cmd_report)
 
     args = parser.parse_args()
     if not args.cmd:
