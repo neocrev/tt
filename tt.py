@@ -149,10 +149,65 @@ def cmd_report(args):
     m, s = divmod(r, 60)
     print(f"  Total: {h}h {m}m across {len(tasks)} tasks")
 
+def cmd_edit(args):
+    """Edit the task name of the last log entry (or by index)."""
+    ensure()
+    if not LOG_FILE.exists():
+        print("tt: no log entries to edit")
+        return
+    with open(LOG_FILE) as f:
+        lines = f.readlines()
+    if not lines:
+        print("tt: no log entries to edit")
+        return
+    idx = -1
+    if args.index is not None:
+        if args.index < 1 or args.index > len(lines):
+            print(f"tt: index {args.index} out of range (1-{len(lines)})")
+            return
+        idx = args.index - 1
+    if idx == -1:
+        idx = len(lines) - 1
+    entry = json.loads(lines[idx].strip())
+    old_task = entry.get("task", "?")
+    entry["task"] = " ".join(args.task) if args.task else old_task
+    lines[idx] = json.dumps(entry) + "\n"
+    with open(LOG_FILE, "w") as f:
+        f.writelines(lines)
+    if entry["task"] != old_task:
+        print(f"tt: entry #{idx+1} task changed: '{old_task}' → '{entry['task']}'")
+    else:
+        print(f"tt: entry #{idx+1} unchanged")
+
+def cmd_delete(args):
+    """Delete a log entry by index (or last entry)."""
+    ensure()
+    if not LOG_FILE.exists():
+        print("tt: no log entries to delete")
+        return
+    with open(LOG_FILE) as f:
+        lines = f.readlines()
+    if not lines:
+        print("tt: no log entries to delete")
+        return
+    idx = -1
+    if args.index is not None:
+        if args.index < 1 or args.index > len(lines):
+            print(f"tt: index {args.index} out of range (1-{len(lines)})")
+            return
+        idx = args.index - 1
+    if idx == -1:
+        idx = len(lines) - 1
+    entry = json.loads(lines.pop(idx).strip())
+    with open(LOG_FILE, "w") as f:
+        f.writelines(lines)
+    task = entry.get("task", "?")
+    print(f"tt: deleted entry #{idx+1} ('{task}')")
+
 def main():
     parser = argparse.ArgumentParser(
         description="tt — simple command-line time tracker.",
-        epilog="Examples:\n  tt start \"Working on X\"\n  tt stop\n  tt status\n  tt log --today\n  tt log",
+        epilog="Examples:\n  tt start \"Working on X\"\n  tt stop\n  tt status\n  tt log --today\n  tt log\n  tt report\n  tt edit \"Fixed bug\"\n  tt edit --index 2 \"New task\"\n  tt delete\n  tt delete --index 2",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = parser.add_subparsers(dest="cmd")
@@ -174,6 +229,15 @@ def main():
 
     p = sub.add_parser("report", help="Show weekly summary of tracked time")
     p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("edit", help="Edit the task name of a log entry")
+    p.add_argument("task", nargs="*", help="New task description")
+    p.add_argument("--index", "-i", type=int, default=None, help="Entry index (default: last)")
+    p.set_defaults(func=cmd_edit)
+
+    p = sub.add_parser("delete", aliases=["rm"], help="Delete a log entry")
+    p.add_argument("--index", "-i", type=int, default=None, help="Entry index (default: last)")
+    p.set_defaults(func=cmd_delete)
 
     args = parser.parse_args()
     if not args.cmd:
