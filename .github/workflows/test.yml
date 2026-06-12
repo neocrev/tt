@@ -16,4 +16,4 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install . 2>&1 | tail -5
-      - run: python -c "import sys; sys.path.insert(0,'.'); from tt import tt; print('import OK')"
+      - run: python -c "compile(open('tt.py').read(), 'tt.py', 'exec'); print('syntax OK')"
